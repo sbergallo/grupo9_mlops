@@ -8,7 +8,7 @@ WORKDIR /app
 COPY requirements_2.txt .
 
 # Instalar dependencias
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements_2.txt
 
 # Copiar el código de la API
 COPY app /app
