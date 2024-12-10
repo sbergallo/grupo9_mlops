@@ -3,7 +3,7 @@
 Trabajo practico final de la materia Machine Learning Operations
 
 Integrantes:
-Augusto San Martin
-Julian Boglio
-Tomas Burello
-Santiago Bergallo
+Augusto San Martin, 
+Julian Boglio, 
+Tomas Burello, 
+Santiago Bergallo.
