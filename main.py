@@ -1,18 +1,13 @@
 from fastapi import FastAPI, HTTPException
+import psycopg2
 from pydantic import BaseModel
 from typing import List, Optional
-import psycopg2
-from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from datetime import datetime, timedelta
 import os 
 
 app = FastAPI()
 
-if _name_ == "_main_":
-    import uvicorn
-
-    # Configuración estándar para App Runner
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
 
 # Conexión a la base de datos
 def get_db_connection():
@@ -24,6 +19,11 @@ def get_db_connection():
         password="grupo-9-mlops",
     )
 
+if _name_ == "_main_":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    
+
 # Modelo de respuesta para recomendaciones
 class Recommendation(BaseModel):
     advertiser: str
@@ -33,13 +33,10 @@ class Recommendation(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"Intro": "Hola! Las rutas para realizar consultas sobre información de los advertisers son: /recommendations/{adv}/{model}, /stats/ o /history/{adv}/ | Notas: adv = advertiser id ; model = 'ctr' o 'products' ."}
+    return {"Intro": "Las rutas para realizar consultas sobre información de los advertisers son: /recommendations/{adv}/{model}, /stats/ o /history/{adv}/ | Notas: adv = advertiser id ; model = 'ctr' o 'products' ."}
 
 
 # Ruta: /recommendations/<ADV>/<Modelo>
-# Lo que te da es una recomendación en base a si lo que queres mostrar son prods mas populares
-# o prods con el mayor ratio de conversion
-
 @app.get("/recommendations/{adv}/{model}", response_model=Recommendation)
 async def get_recommendations(adv: str, model: str):
     try:
@@ -63,6 +60,7 @@ async def get_recommendations(adv: str, model: str):
                 LIMIT 5
             """
         else:
+            # Manejo de errores
             raise HTTPException(status_code=400, detail="Modelo no válido")
 
         cur.execute(query, (adv,))
@@ -78,8 +76,9 @@ async def get_recommendations(adv: str, model: str):
             recommendations=recommendations,
         )
     except Exception as e:
+        # Manejo de errores
         raise HTTPException(status_code=500, detail=str(e))
-
+        
 # Ruta: /stats/
 @app.get("/stats/")
 async def get_stats():
@@ -87,11 +86,11 @@ async def get_stats():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Cantidad de advertisers
+        # Cantidad de advs
         cur.execute("SELECT COUNT(DISTINCT advertiser_id) FROM top_ctr")
         num_advertisers = cur.fetchone()[0]
 
-        # Advertisers con mayor variación
+        # Advs mayor variación
         cur.execute("""
             SELECT advertiser_id, COUNT(DISTINCT product_id) AS variations
             FROM top_ctr
@@ -101,7 +100,7 @@ async def get_stats():
         """)
         advertisers_with_variation = cur.fetchall()
 
-        # Coincidencias entre ambos modelos
+        # Coincidencias
         cur.execute("""
             SELECT COUNT(*)
             FROM top_ctr AS c
@@ -119,22 +118,21 @@ async def get_stats():
             "model_matches": model_matches,
         }
     except Exception as e:
+        # Manejo de errores
         raise HTTPException(status_code=500, detail=str(e))
 
 
 # Ruta: /history/<ADV>/
-
 @app.get("/history/{adv}/")
 async def get_history(adv: str):
     try:
-        # Establecer la conexión a la base de datos
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Calcular la fecha de hace 7 días
+        # Calculo fecha de la ultima semana
         last_week = datetime.now() - timedelta(days=7)
 
-        # Consulta SQL para obtener los datos de las tablas top_ctr y top_product
+        # Consulta sobre las tablas top_ctr y top_product
         query = """
                 SELECT tc.product_id, tc.ctr, tp.views, tc.created_at
                 FROM top_ctr tc
@@ -144,11 +142,8 @@ async def get_history(adv: str):
                 ORDER BY tc.created_at DESC
         """
         
-        # Ejecutar la consulta con el filtro de los últimos 7 días
         cur.execute(query, (adv, last_week))
         data = cur.fetchall()
-
-        # Preparar los resultados para la respuesta en formato JSON
         history = [
             {
                 "product_id": row[0],
@@ -158,8 +153,6 @@ async def get_history(adv: str):
             }
             for row in data
         ]
-
-        # Cerrar cursor y conexión
         cur.close()
         conn.close()
 
@@ -169,5 +162,5 @@ async def get_history(adv: str):
             "history": history,
         }
     except Exception as e:
-        # En caso de error, lanzar una excepción HTTP con el mensaje del error
+        # Manejo de errores
         raise HTTPException(status_code=500, detail=f"Error retrieving history: {str(e)}")
