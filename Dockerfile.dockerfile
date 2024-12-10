@@ -5,7 +5,7 @@ FROM python:3.10-slim-bullseye
 WORKDIR /app
 
 # Copiar dependencias
-COPY requirements.txt .
+COPY requirements_2.txt .
 
 # Instalar dependencias
 RUN pip install --no-cache-dir -r requirements.txt
