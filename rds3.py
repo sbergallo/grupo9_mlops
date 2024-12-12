@@ -14,7 +14,7 @@ BUCKET_NAME = 'grupo-9-mlops'
 # Conectar a la base de datos
 def connect_to_db():
     return psycopg2.connect(
-        database="grupo-9-rds",
+        database="grupo9",
         user="grupo9",
         password="grupo-9-mlops",
         host="grupo-9-rds.cf4i6e6cwv74.us-east-1.rds.amazonaws.com",
