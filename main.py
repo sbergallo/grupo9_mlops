@@ -123,7 +123,7 @@ async def get_history(adv: str):
 
         # Consulta sobre la tabla recommendations
         query = """
-            SELECT product_id, score AS ctr, model AS source, created_at
+            SELECT product_id, score AS ctr, created_at
             FROM recommendations
             WHERE advertiser_id = %s
               AND model IN ('CTR', 'TopProduct')
@@ -138,7 +138,7 @@ async def get_history(adv: str):
                 "product_id": row[0],
                 "ctr": row[1],
                 "views": None if row[2] == 'CTR' else 0,  # Asumes que 'TopProduct' no tiene valor para 'views'
-                "source": row[2],
+                #"source": row[2],
                 "date": row[3].strftime('%Y-%m-%d %H:%M:%S') if row[3] else None,
             }
             for row in data
