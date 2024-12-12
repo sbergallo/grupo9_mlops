@@ -19,7 +19,7 @@ def get_db_connection():
         password="grupo-9-mlops",
     )
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
     
@@ -42,28 +42,17 @@ async def get_recommendations(adv: str, model: str):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
+        
+        query = """
+            SELECT product_id, score
+            FROM recommendations
+            WHERE advertiser_id = %s
+              AND model = %s
+            ORDER BY score DESC
+            LIMIT 5
+        """
 
-        if model == "ctr":
-            query = """
-                SELECT product_id, ctr
-                FROM top_ctr
-                WHERE advertiser_id = %s
-                ORDER BY ctr DESC
-                LIMIT 5
-            """
-        elif model == "products":
-            query = """
-                SELECT product_id, views
-                FROM top_product
-                WHERE advertiser_id = %s
-                ORDER BY views DESC
-                LIMIT 5
-            """
-        else:
-            # Manejo de errores
-            raise HTTPException(status_code=400, detail="Modelo no válido")
-
-        cur.execute(query, (adv,))
+        cur.execute(query, (adv, model))
         data = cur.fetchall()
         recommendations = [{"product_id": row[0], "metric": row[1]} for row in data]
 
@@ -86,26 +75,27 @@ async def get_stats():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Cantidad de advs
-        cur.execute("SELECT COUNT(DISTINCT advertiser_id) FROM top_ctr")
+        # Cantidad de anunciantes
+        cur.execute("SELECT COUNT(DISTINCT advertiser_id) FROM recommendations")
         num_advertisers = cur.fetchone()[0]
 
-        # Advs mayor variación
+        # Anunciantes con mayor variación de productos
         cur.execute("""
             SELECT advertiser_id, COUNT(DISTINCT product_id) AS variations
-            FROM top_ctr
+            FROM recommendations
             GROUP BY advertiser_id
             ORDER BY variations DESC
             LIMIT 5
         """)
         advertisers_with_variation = cur.fetchall()
 
-        # Coincidencias
+        # Coincidencias entre modelos (ajusta según tu lógica específica)
         cur.execute("""
             SELECT COUNT(*)
-            FROM top_ctr AS c
-            JOIN top_product AS p
-            ON c.advertiser_id = p.advertiser_id AND c.product_id = p.product_id
+            FROM recommendations
+            WHERE model IN ('CTR', 'TopProduct')
+            GROUP BY product_id
+            HAVING COUNT(*) > 1
         """)
         model_matches = cur.fetchone()[0]
 
@@ -118,7 +108,6 @@ async def get_stats():
             "model_matches": model_matches,
         }
     except Exception as e:
-        # Manejo de errores
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -129,26 +118,27 @@ async def get_history(adv: str):
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Calculo fecha de la ultima semana
+        # Calcula la fecha de la última semana
         last_week = datetime.now() - timedelta(days=7)
 
-        # Consulta sobre las tablas top_ctr y top_product
+        # Consulta sobre la tabla recommendations
         query = """
-                SELECT tc.product_id, tc.ctr, tp.views, tc.created_at
-                FROM top_ctr tc
-                LEFT JOIN top_product tp ON tp.advertiser_id = tc.advertiser_id AND tp.product_id = tc.product_id
-                WHERE tc.advertiser_id = %s
-                AND tc.created_at >= %s
-                ORDER BY tc.created_at DESC
+            SELECT product_id, score AS ctr, model AS source, created_at
+            FROM recommendations
+            WHERE advertiser_id = %s
+              AND model IN ('CTR', 'TopProduct')
+              AND created_at >= %s
+            ORDER BY created_at DESC
         """
-        
+
         cur.execute(query, (adv, last_week))
         data = cur.fetchall()
         history = [
             {
                 "product_id": row[0],
                 "ctr": row[1],
-                "views": row[2],
+                "views": None if row[2] == 'CTR' else 0,  # Asumes que 'TopProduct' no tiene valor para 'views'
+                "source": row[2],
                 "date": row[3].strftime('%Y-%m-%d %H:%M:%S') if row[3] else None,
             }
             for row in data
@@ -156,11 +146,9 @@ async def get_history(adv: str):
         cur.close()
         conn.close()
 
-        # Retornar los datos en formato JSON
         return {
             "advertiser": adv,
             "history": history,
         }
     except Exception as e:
-        # Manejo de errores
         raise HTTPException(status_code=500, detail=f"Error retrieving history: {str(e)}")
